@@ -8,4 +8,4 @@ services:
       - type: bind
         source: ${PWD}/terraform
         target: /workspaces/weather/terraform
-    command: /workspaces/weather
+    command: ["--auto", "/workspaces/weather"]

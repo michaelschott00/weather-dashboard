@@ -1,7 +1,8 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
-base_path = "abfss://main@myamazingdatalake.dfs.core.windows.net/bronze/"
+# Set as pipeline configuration 'bronze_base_path' (see terraform/azure.tf).
+base_path = spark.conf.get("bronze_base_path")
 
 
 @dp.table(

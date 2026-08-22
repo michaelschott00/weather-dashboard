@@ -9,6 +9,10 @@ terraform {
       source  = "azure/azapi"
       version = "~> 2.12.0"
     }
+    databricks = {
+      source  = "databricks/databricks"
+      version = "~> 1.128.0"
+    }
   }
   backend "local" {
     path = "../terraform-state/terraform.tfstate"
@@ -20,6 +24,12 @@ provider "azurerm" {
 }
 
 provider "azapi" {
+}
+
+provider "databricks" {
+  host                        = "https://${azurerm_databricks_workspace.ws.workspace_url}"
+  azure_workspace_resource_id = azurerm_databricks_workspace.ws.id
+  auth_type                   = "azure-cli"
 }
 
 variable "LATITUDE" {
@@ -74,6 +84,85 @@ resource "azurerm_databricks_workspace" "ws" {
     no_public_ip             = false
     storage_account_sku_name = "Standard_LRS"
   }
+}
+
+# DATABRICKS UNITY CATALOG
+
+resource "databricks_catalog" "weather" {
+  name    = "weather"
+  comment = "Catalog for the weather dashboard medallion architecture."
+}
+
+resource "databricks_schema" "bronze" {
+  catalog_name = databricks_catalog.weather.name
+  name         = "bronze"
+}
+
+resource "databricks_schema" "silver" {
+  catalog_name = databricks_catalog.weather.name
+  name         = "silver"
+}
+
+resource "databricks_schema" "gold" {
+  catalog_name = databricks_catalog.weather.name
+  name         = "gold"
+}
+
+# DATABRICKS PIPELINE SOURCE FILES
+
+# The pipeline picks up its transformations via a glob include, so they must
+# exist in the workspace. Paths from the old export are replaced with /Shared.
+locals {
+  transformation_files = fileset("${path.module}/../databricks/transformations", "**/*.py")
+}
+
+resource "databricks_workspace_file" "transformations" {
+  for_each = local.transformation_files
+
+  path   = "/Shared/weather_pipeline/transformations/${each.value}"
+  source = "${path.module}/../databricks/transformations/${each.value}"
+}
+
+# DATABRICKS PIPELINE
+
+resource "databricks_pipeline" "weather_pipeline" {
+  name       = "Weather pipeline"
+  catalog    = databricks_catalog.weather.name
+  schema     = databricks_schema.silver.name
+  photon     = true
+  serverless = true
+
+  configuration = {
+    bronze_base_path = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net/bronze/"
+  }
+
+  library {
+    glob {
+      include = ["/Shared/weather_pipeline/transformations/**"]
+    }
+  }
+
+  depends_on = [databricks_workspace_file.transformations]
+}
+
+# DATABRICKS JOB
+
+resource "databricks_job" "weather_job" {
+  name = "Weather job"
+
+  task {
+    task_key = "DoTheWeather"
+
+    pipeline_task {
+      pipeline_id = databricks_pipeline.weather_pipeline.id
+    }
+  }
+
+  queue {
+    enabled = true
+  }
+
+  performance_target = "PERFORMANCE_OPTIMIZED"
 }
 
 # DATA FACTORY
@@ -390,7 +479,7 @@ resource "azurerm_data_factory_pipeline" "om" {
         },
         "userProperties": [],
         "typeProperties": {
-            "jobId": "392312162766182"
+            "jobId": "${databricks_job.weather_job.id}"
         },
         "linkedServiceName": {
             "referenceName": "${azapi_resource.dbls.name}",
