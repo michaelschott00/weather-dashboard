@@ -1,0 +1,13 @@
+resources:
+  pipelines:
+    pipeline_weather_pipeline:
+      name: Weather pipeline
+      libraries:
+        - glob:
+            include: /Workspace/Users/xxxxxxxxxxx@xxxxxxxxx.com/Weather pipeline/transformations/**
+      schema: silver
+      photon: true
+      catalog: weather
+      serverless: true
+      root_path: /Workspace/Users/xxxxxxxxxxx@xxxxxxxxx.com/Weather pipeline
+

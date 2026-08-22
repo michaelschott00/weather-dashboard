@@ -1,0 +1,11 @@
+services:
+  agent:
+    image: ghcr.io/anomalyco/opencode
+    volumes:
+      - type: bind
+        source: ${PWD}/databricks
+        target: /workspaces/weather/databricks
+      - type: bind
+        source: ${PWD}/terraform
+        target: /workspaces/weather/terraform
+    command: /workspaces/weather
