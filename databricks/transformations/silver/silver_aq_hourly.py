@@ -1,7 +1,12 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
-from .._columns import AQ_MEASUREMENT_COLUMNS, AQ_TIMESTAMP_PATTERN, source_timestamp_col
+from _columns import AQ_MEASUREMENT_COLUMNS, AQ_TIMESTAMP_PATTERN, source_timestamp_col
 
 # Normalized hourly air quality measurements.
 # arrays_zip merges the parallel arrays inside the 'hourly' struct into one
