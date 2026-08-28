@@ -3,7 +3,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.0.2"
+      version = "~> 5.2.0"
     }
     azapi = {
       source  = "azure/azapi"
@@ -67,7 +67,7 @@ resource "azurerm_storage_data_lake_gen2_path" "bronze" {
 }
 
 resource "azurerm_storage_data_lake_gen2_path" "databricks" {
-  path               = "databricks"
+  path               = "catalog"
   filesystem_name    = azurerm_storage_data_lake_gen2_filesystem.fs.name
   storage_account_id = azurerm_storage_account.dl.id
   resource           = "directory"
@@ -88,23 +88,56 @@ resource "azurerm_databricks_workspace" "ws" {
 
 # DATABRICKS UNITY CATALOG
 
-resource "databricks_catalog" "weather" {
+resource "azurerm_databricks_access_connector" "ac" {
+  name                = "DataBricksAccessConnector"
+  resource_group_name = azurerm_resource_group.wd.name
+  location            = azurerm_resource_group.wd.location
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+resource "databricks_storage_credential" "sc" {
+  name = "adlcredential"
+  azure_managed_identity {
+    access_connector_id = azurerm_databricks_access_connector.ac.id
+  }
+  comment = "Managed identity credential managed by TF"
+}
+
+resource "azurerm_role_assignment" "ac_dl_contributor" {
+  scope                = azurerm_storage_account.dl.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_databricks_access_connector.ac.identity[0].principal_id
+}
+
+resource "databricks_external_location" "dl" {
+  name = "AzureDataLake"
+  url = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net"
+  credential_name = databricks_storage_credential.sc.id
+  comment         = "Managed by TF"
+  depends_on      = [azurerm_role_assignment.ac_dl_contributor]
+}
+
+resource "databricks_catalog" "weathercatalog" {
   name    = "weather"
   comment = "Catalog for the weather dashboard medallion architecture."
+  storage_root = "${databricks_external_location.dl.url}catalog"
 }
 
 resource "databricks_schema" "bronze" {
-  catalog_name = databricks_catalog.weather.name
+  catalog_name = databricks_catalog.weathercatalog.name
   name         = "bronze"
 }
 
 resource "databricks_schema" "silver" {
-  catalog_name = databricks_catalog.weather.name
+  catalog_name = databricks_catalog.weathercatalog.name
   name         = "silver"
 }
 
 resource "databricks_schema" "gold" {
-  catalog_name = databricks_catalog.weather.name
+  catalog_name = databricks_catalog.weathercatalog.name
   name         = "gold"
 }
 
@@ -127,7 +160,7 @@ resource "databricks_workspace_file" "transformations" {
 
 resource "databricks_pipeline" "weather_pipeline" {
   name       = "Weather pipeline"
-  catalog    = databricks_catalog.weather.name
+  catalog    = databricks_catalog.weathercatalog.name
   schema     = databricks_schema.silver.name
   photon     = true
   serverless = true
@@ -138,7 +171,7 @@ resource "databricks_pipeline" "weather_pipeline" {
 
   library {
     glob {
-      include = ["/Shared/weather_pipeline/transformations/**"]
+      include = "/Shared/weather_pipeline/transformations/**"
     }
   }
 
@@ -148,10 +181,10 @@ resource "databricks_pipeline" "weather_pipeline" {
 # DATABRICKS JOB
 
 resource "databricks_job" "weather_job" {
-  name = "Weather job"
+  name = "OpenMeteo API Job"
 
   task {
-    task_key = "DoTheWeather"
+    task_key = "openmeteoapi"
 
     pipeline_task {
       pipeline_id = databricks_pipeline.weather_pipeline.id
@@ -174,6 +207,12 @@ resource "azurerm_data_factory" "df" {
   identity {
     type = "SystemAssigned"
   }
+}
+
+resource "azurerm_role_assignment" "df_db_contributor" {
+  scope                = azurerm_resource_group.wd.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_data_factory.df.identity[0].principal_id
 }
 
 # DATA FACTORY LINKED SERVICES
@@ -211,7 +250,7 @@ resource "azapi_resource" "fc" {
     properties = {
       type = "HttpServer"
       typeProperties = {
-        url                = "https://api.open-meteo.com"
+        url                = "https://api.open-meteo.com/"
         authenticationType = "Anonymous"
       }
     }
@@ -227,7 +266,7 @@ resource "azapi_resource" "aq" {
     properties = {
       type = "HttpServer"
       typeProperties = {
-        url                = "https://air-quality-api.open-meteo.com"
+        url                = "https://air-quality-api.open-meteo.com/"
         authenticationType = "Anonymous"
       }
     }
@@ -264,7 +303,7 @@ resource "azapi_resource" "srcfc" {
           defaultValue = "Europe/Berlin"
         }
         forecast_days = {
-          type         = "number"
+          type         = "string"
           defaultValue = 1
         }
       }
@@ -273,6 +312,7 @@ resource "azapi_resource" "srcfc" {
       typeProperties = {
         location = {
           type = "HttpServerLocation"
+          relativeUrl = "v1/forecast?latitude=@{dataset().latitude}&longitude=@{dataset().longitude}&timezone=@{dataset().timezone}&forecast_days=@{dataset().forecast_days}&hourly=@{dataset().hourly}"
         }
       }
       schema = {}
@@ -301,14 +341,14 @@ resource "azapi_resource" "srcaq" {
         }
         hourly = {
           type         = "string"
-          defaultValue = "pm2_5,carbon_dioxide,ozone,european_aqi"
+          defaultValue = "pm2_5,ozone,european_aqi"
         }
         timezone = {
           type         = "string"
           defaultValue = "Europe/Berlin"
         }
         forecast_days = {
-          type         = "number"
+          type         = "string"
           defaultValue = 1
         }
         domains = {
@@ -321,6 +361,7 @@ resource "azapi_resource" "srcaq" {
       typeProperties = {
         location = {
           type = "HttpServerLocation"
+          relativeUrl = "v1/air-quality?latitude=@{dataset().latitude}&longitude=@{dataset().longitude}&hourly=@{dataset().hourly}&timezone=@{dataset().timezone}&forecast_days=@{dataset().forecast_days}&domains=@{dataset().domains}"
         }
       }
       schema = {}
@@ -338,6 +379,7 @@ resource "azurerm_data_factory_dataset_json" "snkfc" {
     filename                 = "weather_@{utcNow('yyyy-MM-dd_HH-mm-ss')}.json"
     dynamic_filename_enabled = true
   }
+  encoding = "UTF-8"
 }
 
 resource "azurerm_data_factory_dataset_json" "snkaq" {
@@ -350,142 +392,158 @@ resource "azurerm_data_factory_dataset_json" "snkaq" {
     filename                 = "aq_@{utcNow('yyyy-MM-dd_HH-mm-ss')}.json"
     dynamic_filename_enabled = true
   }
+  encoding = "UTF-8"
 }
 
 # DATA FACTORY PIPELINES
 
 resource "azurerm_data_factory_pipeline" "om" {
-  name            = "OpenMeteoIngestionPipeline"
+  name            = "openmeteoingestionpipeline"
   data_factory_id = azurerm_data_factory.df.id
   activities_json = <<JSON
-[
-    {
-        "name": "OpenMeteo Weather Ingestion Pipeline",
-        "type": "Copy",
-        "dependsOn": [],
-        "policy": {
-            "timeout": "0.12:00:00",
-            "retry": 0,
-            "retryIntervalInSeconds": 30,
-            "secureOutput": false,
-            "secureInput": false
-        },
-        "userProperties": [],
-        "typeProperties": {
-            "source": {
-                "type": "JsonSource",
-                "storeSettings": {
-                    "type": "HttpReadSettings",
-                    "requestMethod": "GET"
+  [
+            {
+                "name": "OpenMeteo Weather Ingestion Pipeline",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
                 },
-                "formatSettings": {
-                    "type": "JsonReadSettings"
-                }
-            },
-            "sink": {
-                "type": "JsonSink",
-                "storeSettings": {
-                    "type": "AzureBlobFSWriteSettings"
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "JsonSource",
+                        "storeSettings": {
+                            "type": "HttpReadSettings",
+                            "requestMethod": "GET"
+                        },
+                        "formatSettings": {
+                            "type": "JsonReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "JsonSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "JsonWriteSettings"
+                        }
+                    },
+                    "enableStaging": false
                 },
-                "formatSettings": {
-                    "type": "JsonWriteSettings"
-                }
-            },
-            "enableStaging": false
-        },
-        "inputs": [
-            {
-                "referenceName": "${azapi_resource.srcfc.name}",
-                "type": "DatasetReference"
-            }
-        ],
-        "outputs": [
-            {
-                "referenceName": "${azurerm_data_factory_dataset_json.snkfc.name}",
-                "type": "DatasetReference"
-            }
-        ]
-    },
-    {
-        "name": "OpenMeteo Air Quality Ingestion Pipeline",
-        "type": "Copy",
-        "dependsOn": [],
-        "policy": {
-            "timeout": "0.12:00:00",
-            "retry": 0,
-            "retryIntervalInSeconds": 30,
-            "secureOutput": false,
-            "secureInput": false
-        },
-        "userProperties": [],
-        "typeProperties": {
-            "source": {
-                "type": "JsonSource",
-                "storeSettings": {
-                    "type": "HttpReadSettings",
-                    "requestMethod": "GET"
-                },
-                "formatSettings": {
-                    "type": "JsonReadSettings"
-                }
-            },
-            "sink": {
-                "type": "JsonSink",
-                "storeSettings": {
-                    "type": "AzureBlobFSWriteSettings"
-                },
-                "formatSettings": {
-                    "type": "JsonWriteSettings"
-                }
-            },
-            "enableStaging": false
-        },
-        "inputs": [
-            {
-                "referenceName": "${azapi_resource.srcaq.name}",
-                "type": "DatasetReference"
-            }
-        ],
-        "outputs": [
-            {
-                "referenceName": "${azurerm_data_factory_dataset_json.snkaq.name}",
-                "type": "DatasetReference"
-            }
-        ]
-    },
-    {
-        "name": "ETL",
-        "type": "DatabricksJob",
-        "dependsOn": [
-            {
-                "activity": "OpenMeteo Weather Ingestion Pipeline",
-                "dependencyConditions": [
-                    "Succeeded"
+                "inputs": [
+                    {
+                        "referenceName": "${azapi_resource.srcfc.name}",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "forecast_days": "1",
+                            "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure,cloud_cover,uv_index",
+                            "latitude": "${var.LATITUDE}",
+                            "longitude": "${var.LONGITUDE}",
+                            "timezone": "Europe/Berlin"
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "${azurerm_data_factory_dataset_json.snkfc.name}",
+                        "type": "DatasetReference"
+                    }
                 ]
             },
             {
-                "activity": "OpenMeteo Air Ingestion Pipeline",
-                "dependencyConditions": [
-                    "Succeeded"
+                "name": "OpenMeteo Air Quality Ingestion Pipeline",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "JsonSource",
+                        "storeSettings": {
+                            "type": "HttpReadSettings",
+                            "requestMethod": "GET"
+                        },
+                        "formatSettings": {
+                            "type": "JsonReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "JsonSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "JsonWriteSettings"
+                        }
+                    },
+                    "enableStaging": false
+                },
+                "inputs": [
+                    {
+                        "referenceName": "${azapi_resource.srcaq.name}",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "domains": "cams_europe",
+                            "forecast_days": "1",
+                            "hourly": "pm2_5,ozone,european_aqi",
+                            "latitude": "${var.LATITUDE}",
+                            "longitude": "${var.LONGITUDE}",
+                            "timezone": "Europe/Berlin"
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "${azurerm_data_factory_dataset_json.snkaq.name}",
+                        "type": "DatasetReference"
+                    }
                 ]
+            },
+            {
+                "name": "ETL",
+                "type": "DatabricksJob",
+                "dependsOn": [
+                    {
+                        "activity": "OpenMeteo Weather Ingestion Pipeline",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "OpenMeteo Air Quality Ingestion Pipeline",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "jobId": "${databricks_job.weather_job.id}"
+                },
+                "linkedServiceName": {
+                    "referenceName": "${azapi_resource.dbls.name}",
+                    "type": "LinkedServiceReference"
+                }
             }
-        ],
-        "policy": {
-            "timeout": "0.12:00:00",
-            "retry": 0,
-            "retryIntervalInSeconds": 30,
-            "secureOutput": false,
-            "secureInput": false
-        },
-        "userProperties": [],
-        "typeProperties": {
-            "jobId": "${databricks_job.weather_job.id}"
-        },
-        "linkedServiceName": {
-            "referenceName": "${azapi_resource.dbls.name}",
-            "type": "LinkedServiceReference"
-        }
-    }
 ]
   JSON
 }
