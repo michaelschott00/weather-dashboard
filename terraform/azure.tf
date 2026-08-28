@@ -23,8 +23,7 @@ provider "azurerm" {
   features {}
 }
 
-provider "azapi" {
-}
+provider "azapi" {}
 
 provider "databricks" {
   host                        = "https://${azurerm_databricks_workspace.ws.workspace_url}"
@@ -32,11 +31,11 @@ provider "databricks" {
   auth_type                   = "azure-cli"
 }
 
-variable "LATITUDE" {
-}
+variable "LATITUDE" {}
 
-variable "LONGITUDE" {
-}
+variable "LONGITUDE" {}
+
+data "azurerm_client_config" "current" {}
 
 resource "azurerm_resource_group" "wd" {
   name     = "WeatherDashboard"
@@ -104,12 +103,6 @@ resource "databricks_storage_credential" "sc" {
     access_connector_id = azurerm_databricks_access_connector.ac.id
   }
   comment = "Managed identity credential managed by TF"
-}
-
-resource "azurerm_role_assignment" "ac_dl_contributor" {
-  scope                = azurerm_storage_account.dl.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_databricks_access_connector.ac.identity[0].principal_id
 }
 
 resource "databricks_external_location" "dl" {
@@ -209,9 +202,23 @@ resource "azurerm_data_factory" "df" {
   }
 }
 
+# RBAC
+
 resource "azurerm_role_assignment" "df_db_contributor" {
-  scope                = azurerm_resource_group.wd.id
+  scope                = azurerm_databricks_workspace.ws.id
   role_definition_name = "Contributor"
+  principal_id         = azurerm_data_factory.df.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "ac_dl_contributor" {
+  scope                = "${azurerm_storage_account.dl.id}/blobServices/default/containers/${azurerm_storage_data_lake_gen2_filesystem.fs.name}"
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_databricks_access_connector.ac.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "df_dl_contributor" {
+  scope                = "${azurerm_storage_account.dl.id}/blobServices/default/containers/${azurerm_storage_data_lake_gen2_filesystem.fs.name}"
+  role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_data_factory.df.identity[0].principal_id
 }
 
@@ -422,7 +429,8 @@ resource "azurerm_data_factory_pipeline" "om" {
                             "requestMethod": "GET"
                         },
                         "formatSettings": {
-                            "type": "JsonReadSettings"
+                            "type": "JsonReadSettings",
+                            "compressionProperties": null
                         }
                     },
                     "sink": {
@@ -469,7 +477,8 @@ resource "azurerm_data_factory_pipeline" "om" {
                             "requestMethod": "GET"
                         },
                         "formatSettings": {
-                            "type": "JsonReadSettings"
+                            "type": "JsonReadSettings",
+                            "compressionProperties": null
                         }
                     },
                     "sink": {
