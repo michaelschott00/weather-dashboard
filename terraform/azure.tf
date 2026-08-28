@@ -439,14 +439,7 @@ resource "azurerm_data_factory_pipeline" "om" {
                 "inputs": [
                     {
                         "referenceName": "${azapi_resource.srcfc.name}",
-                        "type": "DatasetReference",
-                        "parameters": {
-                            "forecast_days": "1",
-                            "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure,cloud_cover,uv_index",
-                            "latitude": "${var.LATITUDE}",
-                            "longitude": "${var.LONGITUDE}",
-                            "timezone": "Europe/Berlin"
-                        }
+                        "type": "DatasetReference"
                     }
                 ],
                 "outputs": [
@@ -493,15 +486,7 @@ resource "azurerm_data_factory_pipeline" "om" {
                 "inputs": [
                     {
                         "referenceName": "${azapi_resource.srcaq.name}",
-                        "type": "DatasetReference",
-                        "parameters": {
-                            "domains": "cams_europe",
-                            "forecast_days": "1",
-                            "hourly": "pm2_5,ozone,european_aqi",
-                            "latitude": "${var.LATITUDE}",
-                            "longitude": "${var.LONGITUDE}",
-                            "timezone": "Europe/Berlin"
-                        }
+                        "type": "DatasetReference"
                     }
                 ],
                 "outputs": [
