@@ -1,5 +1,7 @@
 from pyspark import pipelines as dp
 
+from .._columns import METADATA_COLUMNS
+
 # Outer-level weather fields — one row per ingested file.
 # Join to silver_weather_hourly / silver_weather_hourly_units on _source_file.
 
@@ -11,14 +13,5 @@ from pyspark import pipelines as dp
 def silver_weather_metadata():
     return (
         spark.readStream.table("weather.bronze.bronze_weather")
-        .select(
-            "_source_file",
-            "latitude",
-            "longitude",
-            "generationtime_ms",
-            "utc_offset_seconds",
-            "timezone",
-            "timezone_abbreviation",
-            "elevation",
-        )
+        .select(*METADATA_COLUMNS)
     )

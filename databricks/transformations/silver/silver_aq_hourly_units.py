@@ -1,6 +1,8 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
+from .._columns import AQ_MEASUREMENT_COLUMNS
+
 # Units for each hourly air quality field — one row per ingested file.
 # Join to silver_aq_hourly on _source_file to attach units to measurements.
 
@@ -15,9 +17,9 @@ def silver_aq_hourly_units():
         .select(
             "_source_file",
             F.col("hourly_units.time").alias("time_unit"),
-            F.col("hourly_units.pm2_5").alias("pm2_5_unit"),
-            F.col("hourly_units.carbon_dioxide").alias("carbon_dioxide_unit"),
-            F.col("hourly_units.ozone").alias("ozone_unit"),
-            F.col("hourly_units.european_aqi").alias("european_aqi_unit"),
+            *[
+                F.col(f"hourly_units.{c}").alias(f"{c}_unit")
+                for c in AQ_MEASUREMENT_COLUMNS
+            ],
         )
     )

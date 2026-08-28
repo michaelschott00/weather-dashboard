@@ -1,64 +1,41 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
+from pyspark.sql import SparkSession
+
+from .._columns import (
+    WEATHER_MEASUREMENT_COLUMNS,
+    AQ_MEASUREMENT_COLUMNS,
+    latest_file_per_day,
+)
+
+spark: SparkSession
 
 @dp.materialized_view(
     name="weather.gold.gold_hourly_facts",
     comment="Gold layer: fact table with hourly weather and air quality measurements joined on timestamp."
 )
 def gold_hourly_facts():
-    latest_file_per_day = Window.partitionBy("measurement_day")
-
     # Batch read from silver streaming tables and keep only the newest source file
     # for each measurement day before joining weather and air quality rows.
     # Filter out rows with null source_file_timestamp (old data before timestamp was added).
-    weather = (
-        spark.read.table("silver_weather_hourly")
-        .filter(F.col("source_file_timestamp").isNotNull())
-        .withColumn("measurement_day", F.to_date("time"))
-        .withColumn(
-            "latest_source_file_timestamp",
-            F.max("source_file_timestamp").over(latest_file_per_day),
-        )
-        .filter(F.col("source_file_timestamp") == F.col("latest_source_file_timestamp"))
-        .drop("measurement_day", "latest_source_file_timestamp")
-    )
-    aq = (
-        spark.read.table("silver_aq_hourly")
-        .filter(F.col("source_file_timestamp").isNotNull())
-        .withColumn("measurement_day", F.to_date("time"))
-        .withColumn(
-            "latest_source_file_timestamp",
-            F.max("source_file_timestamp").over(latest_file_per_day),
-        )
-        .filter(F.col("source_file_timestamp") == F.col("latest_source_file_timestamp"))
-        .drop("measurement_day", "latest_source_file_timestamp")
-    )
-    
-    # Join on time, drop carbon_dioxide (all nulls), and drop lineage columns
+    weather = latest_file_per_day(spark, "silver_weather_hourly")
+    aq = latest_file_per_day(spark, "silver_aq_hourly")
+
+    # Join on time and drop lineage columns
     df = (
         weather
         .join(aq, on="time", how="inner")
         .select(
             "time",
-            # Weather measurements
-            "temperature_2m",
-            "relative_humidity_2m",
-            "apparent_temperature",
-            "wind_speed_10m",
-            "surface_pressure",
-            "cloud_cover",
-            "uv_index",
-            # Air quality measurements (excluding carbon_dioxide)
-            "pm2_5",
-            "ozone",
-            "european_aqi"
+            *[F.col(c) for c in WEATHER_MEASUREMENT_COLUMNS],
+            *[F.col(c) for c in AQ_MEASUREMENT_COLUMNS],
         )
     )
-    
+
     # Window for lag calculation (ordered by time)
     time_window = Window.orderBy("time")
-    
+
     # Add KPI score columns
     return (
         df
@@ -66,7 +43,7 @@ def gold_hourly_facts():
         .withColumn(
             "apparent_temperature_score",
             F.when(F.col("apparent_temperature") < 10, F.lit(0))
-            .when(F.col("apparent_temperature") < 15, 
+            .when(F.col("apparent_temperature") < 15,
                   (F.col("apparent_temperature") - 10) / (15 - 10) * 100)
             .when(F.col("apparent_temperature") <= 22, F.lit(100))
             .when(F.col("apparent_temperature") < 26,
@@ -145,19 +122,8 @@ def gold_hourly_facts():
         )
         .select(
             "time",
-            # Original weather measurements
-            "temperature_2m",
-            "relative_humidity_2m",
-            "apparent_temperature",
-            "wind_speed_10m",
-            "surface_pressure",
-            "cloud_cover",
-            "uv_index",
-            # Original air quality measurements
-            "pm2_5",
-            "ozone",
-            "european_aqi",
-            # New KPI scores
+            *[F.col(c) for c in WEATHER_MEASUREMENT_COLUMNS],
+            *[F.col(c) for c in AQ_MEASUREMENT_COLUMNS],
             "apparent_temperature_score",
             "surface_pressure_score",
             "surface_pressure_delta_score",
@@ -165,7 +131,6 @@ def gold_hourly_facts():
             "cloud_cover_score",
             "relative_humidity_2m_score",
             "wind_speed_10m_score",
-            # Composite score
-            "weather_score"
+            "weather_score",
         )
     )
