@@ -1,11 +1,6 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from pyspark import pipelines as dp
 
-from _columns import METADATA_COLUMNS
+from transformations._columns import METADATA_COLUMNS
 
 # Outer-level weather fields — one row per ingested file.
 # Join to silver_weather_hourly / silver_weather_hourly_units on _source_file.

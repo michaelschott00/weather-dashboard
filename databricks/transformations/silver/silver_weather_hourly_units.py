@@ -1,12 +1,7 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
-from _columns import WEATHER_MEASUREMENT_COLUMNS
+from transformations._columns import WEATHER_MEASUREMENT_COLUMNS
 
 # Units for each hourly weather field — one row per ingested file.
 # Join to silver_weather_hourly on _source_file to attach units to measurements.

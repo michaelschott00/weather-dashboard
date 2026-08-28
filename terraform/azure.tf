@@ -136,8 +136,6 @@ resource "databricks_schema" "gold" {
 
 # DATABRICKS PIPELINE SOURCE FILES
 
-# The pipeline picks up its transformations via a glob include, so they must
-# exist in the workspace. Paths from the old export are replaced with /Shared.
 locals {
   transformation_files = fileset("${path.module}/../databricks/transformations", "**/*.py")
 }
@@ -157,6 +155,7 @@ resource "databricks_pipeline" "weather_pipeline" {
   schema     = databricks_schema.silver.name
   photon     = true
   serverless = true
+  root_path = "/Shared/weather_pipeline"
 
   configuration = {
     bronze_base_path = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net/bronze/"
@@ -178,7 +177,7 @@ resource "databricks_job" "weather_job" {
 
   task {
     task_key = "openmeteoapi"
-
+    max_retries = 0
     pipeline_task {
       pipeline_id = databricks_pipeline.weather_pipeline.id
     }
@@ -211,13 +210,13 @@ resource "azurerm_role_assignment" "df_db_contributor" {
 }
 
 resource "azurerm_role_assignment" "ac_dl_contributor" {
-  scope                = "${azurerm_storage_account.dl.id}/blobServices/default/containers/${azurerm_storage_data_lake_gen2_filesystem.fs.name}"
+  scope                = azurerm_storage_account.dl.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_databricks_access_connector.ac.identity[0].principal_id
 }
 
 resource "azurerm_role_assignment" "df_dl_contributor" {
-  scope                = "${azurerm_storage_account.dl.id}/blobServices/default/containers/${azurerm_storage_data_lake_gen2_filesystem.fs.name}"
+  scope                = azurerm_storage_account.dl.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_data_factory.df.identity[0].principal_id
 }
