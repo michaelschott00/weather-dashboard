@@ -1,7 +1,10 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
+from pyspark.sql import SparkSession
 
 from transformations._columns import AQ_MEASUREMENT_COLUMNS
+
+spark: SparkSession
 
 # Units for each hourly air quality field — one row per ingested file.
 # Join to silver_aq_hourly on _source_file to attach units to measurements.

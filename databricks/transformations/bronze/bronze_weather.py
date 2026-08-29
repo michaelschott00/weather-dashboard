@@ -1,8 +1,11 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
+from pyspark.sql import SparkSession
+
+spark: SparkSession
 
 # Set as pipeline configuration 'bronze_base_path' (see terraform/azure.tf).
-base_path = spark.conf.get("bronze_base_path")
+base_path = spark.conf.get("bronze_base_path")  # type: ignore
 
 
 @dp.table(

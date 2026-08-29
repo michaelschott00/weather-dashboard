@@ -1,7 +1,10 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
+from pyspark.sql import SparkSession
 
 from transformations._columns import WEATHER_MEASUREMENT_COLUMNS, WEATHER_TIMESTAMP_PATTERN, source_timestamp_col
+
+spark: SparkSession
 
 # Normalized hourly weather measurements.
 # arrays_zip merges the parallel arrays inside the 'hourly' struct into one

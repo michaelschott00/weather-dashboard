@@ -1,5 +1,8 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
+from pyspark.sql import SparkSession
+
+spark: SparkSession
 
 @dp.materialized_view(
     name="weather.gold.gold_time_dim",
