@@ -11,17 +11,14 @@ from transformations._columns import (
 
 spark: SparkSession
 
-@dp.materialized_view(
-    name="weather.gold.gold_hourly_facts",
-    comment="Gold layer: fact table with hourly weather and air quality measurements joined on timestamp."
-)
-def gold_hourly_facts():
-    # Batch read from silver streaming tables and keep only the newest source file
-    # for each measurement day before joining weather and air quality rows.
-    # Filter out rows with null source_file_timestamp (old data before timestamp was added).
-    weather = latest_file_per_day(spark, "silver_weather_hourly")
-    aq = latest_file_per_day(spark, "silver_aq_hourly")
 
+def compute_gold_hourly_facts(weather, aq):
+    """Join silver weather and air quality rows on time and add KPI trapezoid parameters.
+
+    weather, aq: batch DataFrames of hourly silver measurements (already restricted to
+    the newest source file per measurement day), each with a 'time' column plus the
+    measurement columns defined in _columns.
+    """
     # Join on time and drop lineage columns
     df = (
         weather
@@ -127,3 +124,16 @@ def gold_hourly_facts():
             "wind_speed_10m_neg_slope_end",
         )
     )
+
+
+@dp.materialized_view(
+    name="weather.gold.gold_hourly_facts",
+    comment="Gold layer: fact table with hourly weather and air quality measurements joined on timestamp."
+)
+def gold_hourly_facts():
+    # Batch read from silver streaming tables and keep only the newest source file
+    # for each measurement day before joining weather and air quality rows.
+    # Filter out rows with null source_file_timestamp (old data before timestamp was added).
+    weather = latest_file_per_day(spark, "silver_weather_hourly")
+    aq = latest_file_per_day(spark, "silver_aq_hourly")
+    return compute_gold_hourly_facts(weather, aq)

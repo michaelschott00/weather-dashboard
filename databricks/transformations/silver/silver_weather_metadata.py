@@ -9,12 +9,19 @@ spark: SparkSession
 # Join to silver_weather_hourly / silver_weather_hourly_units on _source_file.
 
 
+def compute_silver_weather_metadata(df):
+    """Select the outer metadata fields from raw bronze weather rows.
+
+    df: streaming or batch DataFrame of bronze weather rows.
+    """
+    return df.select(*METADATA_COLUMNS)
+
+
 @dp.table(
     comment="Weather measurement metadata: all outer fields except 'hourly' and "
             "'hourly_units'. One row per source file.",
 )
 def silver_weather_metadata():
-    return (
+    return compute_silver_weather_metadata(
         spark.readStream.table("weather.bronze.bronze_weather")
-        .select(*METADATA_COLUMNS)
     )

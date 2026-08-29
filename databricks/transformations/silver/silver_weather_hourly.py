@@ -15,14 +15,14 @@ spark: SparkSession
 # keep only the newest source file for each measurement day.
 
 
-@dp.table(
-    comment="Normalized hourly weather measurements. One row per hour per source file. "
-            "Join to silver_weather_metadata on _source_file.",
-)
-def silver_weather_hourly():
+def compute_silver_weather_hourly(df):
+    """Normalize raw bronze weather rows into one row per hour per source file.
+
+    df: streaming or batch DataFrame of bronze weather rows (with a `hourly`
+    struct of parallel arrays and a `_source_file` column).
+    """
     return (
-        spark.readStream.table("weather.bronze.bronze_weather")
-        .select(
+        df.select(
             "_source_file",
             F.explode(
                 F.arrays_zip(
@@ -40,4 +40,14 @@ def silver_weather_hourly():
             F.col("h.time").cast("timestamp").alias("time"),
             *[F.col(f"h.{c}").alias(c) for c in WEATHER_MEASUREMENT_COLUMNS],
         )
+    )
+
+
+@dp.table(
+    comment="Normalized hourly weather measurements. One row per hour per source file. "
+            "Join to silver_weather_metadata on _source_file.",
+)
+def silver_weather_hourly():
+    return compute_silver_weather_hourly(
+        spark.readStream.table("weather.bronze.bronze_weather")
     )

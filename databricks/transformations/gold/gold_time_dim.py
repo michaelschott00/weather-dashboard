@@ -4,14 +4,11 @@ from pyspark.sql import SparkSession
 
 spark: SparkSession
 
-@dp.materialized_view(
-    name="weather.gold.gold_time_dim",
-    comment="Gold layer: time dimension with coarser-grained attributes (day, week, month, year) for each hourly timestamp."
-)
-def gold_time_dim():
-    # Read fact table to get distinct timestamps
-    facts = spark.read.table("gold.gold_hourly_facts")
-    
+def compute_gold_time_dim(facts):
+    """Derive a time dimension from the distinct hourly timestamps in the facts table.
+
+    facts: batch DataFrame with a 'time' column.
+    """
     return (
         facts
         .select("time")
@@ -28,3 +25,13 @@ def gold_time_dim():
             "year"
         )
     )
+
+
+@dp.materialized_view(
+    name="weather.gold.gold_time_dim",
+    comment="Gold layer: time dimension with coarser-grained attributes (day, week, month, year) for each hourly timestamp."
+)
+def gold_time_dim():
+    # Read fact table to get distinct timestamps
+    facts = spark.read.table("gold.gold_hourly_facts")
+    return compute_gold_time_dim(facts)
