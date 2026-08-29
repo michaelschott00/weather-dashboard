@@ -1,6 +1,7 @@
 services:
   agent:
-    image: ghcr.io/anomalyco/opencode
+    build:
+      dockerfile: Dockerfile
     volumes:
       - type: bind
         source: ${PWD}/databricks
@@ -8,4 +9,7 @@ services:
       - type: bind
         source: ${PWD}/terraform
         target: /workspaces/weather/terraform
+      - type: bind
+        source: ${PWD}/AGENTS.md
+        target: /workspaces/weather/AGENTS.md
     command: ["--auto", "/workspaces/weather"]
