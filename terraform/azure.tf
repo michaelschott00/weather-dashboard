@@ -159,6 +159,9 @@ resource "databricks_pipeline" "weather_pipeline" {
 
   configuration = {
     bronze_base_path = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net/bronze/"
+    "pipelines.maxFlowRetryAttempts" = 0
+    "pipelines.numUpdateRetryAttempts" = 0
+    "pipelines.numStreamRetryAttempts" = 0
   }
 
   library {
