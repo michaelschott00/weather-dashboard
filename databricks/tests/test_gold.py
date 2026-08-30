@@ -130,45 +130,104 @@ def test_gold_time_dim_derives_attributes(spark):
     assert r.week == 1
 
 
-def test_gold_thresholds_dim_has_one_row_per_metric(spark):
+def test_gold_thresholds_dim_has_one_row(spark):
     out = gold_thresholds_dim.compute_gold_thresholds_dim(spark)
 
-    metrics = [r.metric for r in out.orderBy("metric").collect()]
-    assert metrics == [
-        "apparent_temperature",
-        "cloud_cover",
-        "european_aqi",
-        "relative_humidity_2m",
-        "surface_pressure",
-        "surface_pressure_delta",
-        "wind_speed_10m",
-    ]
+    assert out.count() == 1
+    row = out.first()
+    assert row.thresholds_id == "trapezoid"
+
+    # wide schema: one column per {metric}_{param}
+    expected_cols = {
+        "thresholds_id",
+        "apparent_temperature_pos_slope_start",
+        "apparent_temperature_pos_slope_end",
+        "apparent_temperature_neg_slope_start",
+        "apparent_temperature_neg_slope_end",
+        "apparent_temperature_peak_start",
+        "apparent_temperature_peak_end",
+        "surface_pressure_pos_slope_start",
+        "surface_pressure_pos_slope_end",
+        "surface_pressure_peak_start",
+        "surface_pressure_peak_end",
+        "surface_pressure_delta_pos_slope_start",
+        "surface_pressure_delta_pos_slope_end",
+        "surface_pressure_delta_peak_start",
+        "surface_pressure_delta_peak_end",
+        "european_aqi_neg_slope_start",
+        "european_aqi_neg_slope_end",
+        "european_aqi_peak_start",
+        "european_aqi_peak_end",
+        "cloud_cover_neg_slope_start",
+        "cloud_cover_neg_slope_end",
+        "cloud_cover_peak_start",
+        "cloud_cover_peak_end",
+        "relative_humidity_2m_pos_slope_start",
+        "relative_humidity_2m_pos_slope_end",
+        "relative_humidity_2m_neg_slope_start",
+        "relative_humidity_2m_neg_slope_end",
+        "relative_humidity_2m_peak_start",
+        "relative_humidity_2m_peak_end",
+        "wind_speed_10m_pos_slope_start",
+        "wind_speed_10m_pos_slope_end",
+        "wind_speed_10m_neg_slope_start",
+        "wind_speed_10m_neg_slope_end",
+        "wind_speed_10m_peak_start",
+        "wind_speed_10m_peak_end",
+    }
+    assert expected_cols <= set(out.columns)
+    # no metric column in wide schema
+    assert "metric" not in out.columns
 
 
 def test_gold_thresholds_dim_contains_trapezoid_parameters(spark):
     out = gold_thresholds_dim.compute_gold_thresholds_dim(spark)
-    by_metric = {r.metric: r for r in out.collect()}
+    row = out.first()
 
-    temp = by_metric["apparent_temperature"]
-    assert temp.pos_slope_start == 10
-    assert temp.pos_slope_end == 15
-    assert temp.peak_start == 15
-    assert temp.peak_end == 22
-    assert temp.neg_slope_start == 22
-    assert temp.neg_slope_end == 26
+    # apparent_temperature: all thresholds present
+    assert row.apparent_temperature_pos_slope_start == 10
+    assert row.apparent_temperature_pos_slope_end == 15
+    assert row.apparent_temperature_peak_start == 15
+    assert row.apparent_temperature_peak_end == 22
+    assert row.apparent_temperature_neg_slope_start == 22
+    assert row.apparent_temperature_neg_slope_end == 26
 
-    pres = by_metric["surface_pressure"]
-    assert pres.pos_slope_start == 1010
-    assert pres.pos_slope_end == 1020
-    assert pres.peak_start == 1020
-    assert pres.peak_end == 1030
-    assert pres.neg_slope_start is None
-    assert pres.neg_slope_end is None
+    # surface_pressure: no negative slope
+    assert row.surface_pressure_pos_slope_start == 1010
+    assert row.surface_pressure_pos_slope_end == 1020
+    assert row.surface_pressure_peak_start == 1020
+    assert row.surface_pressure_peak_end == 1030
 
-    aqi = by_metric["european_aqi"]
-    assert aqi.pos_slope_start is None
-    assert aqi.pos_slope_end is None
-    assert aqi.peak_start == 0
-    assert aqi.peak_end == 25
-    assert aqi.neg_slope_start == 25
-    assert aqi.neg_slope_end == 100
+    # surface_pressure_delta: no negative slope
+    assert row.surface_pressure_delta_pos_slope_start == -5
+    assert row.surface_pressure_delta_pos_slope_end == 3
+    assert row.surface_pressure_delta_peak_start == 3
+    assert row.surface_pressure_delta_peak_end == 5
+
+    # european_aqi: no positive slope
+    assert row.european_aqi_peak_start == 0
+    assert row.european_aqi_peak_end == 25
+    assert row.european_aqi_neg_slope_start == 25
+    assert row.european_aqi_neg_slope_end == 100
+
+    # cloud_cover: no positive slope
+    assert row.cloud_cover_peak_start == 0
+    assert row.cloud_cover_peak_end == 50
+    assert row.cloud_cover_neg_slope_start == 50
+    assert row.cloud_cover_neg_slope_end == 90
+
+    # relative_humidity_2m: all thresholds present
+    assert row.relative_humidity_2m_pos_slope_start == 30
+    assert row.relative_humidity_2m_pos_slope_end == 40
+    assert row.relative_humidity_2m_peak_start == 40
+    assert row.relative_humidity_2m_peak_end == 60
+    assert row.relative_humidity_2m_neg_slope_start == 60
+    assert row.relative_humidity_2m_neg_slope_end == 80
+
+    # wind_speed_10m: all thresholds present
+    assert row.wind_speed_10m_pos_slope_start == 0
+    assert row.wind_speed_10m_pos_slope_end == 12
+    assert row.wind_speed_10m_peak_start == 12
+    assert row.wind_speed_10m_peak_end == 19
+    assert row.wind_speed_10m_neg_slope_start == 19
+    assert row.wind_speed_10m_neg_slope_end == 39
