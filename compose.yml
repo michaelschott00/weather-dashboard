@@ -12,4 +12,7 @@ services:
       - type: bind
         source: ${PWD}/AGENTS.md
         target: /workspaces/weather/AGENTS.md
+      - type: bind
+        source: ${PWD}/Dockerfile
+        target: /workspaces/weather/Dockerfile
     command: ["--auto", "/workspaces/weather"]

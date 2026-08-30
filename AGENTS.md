@@ -1,4 +1,4 @@
-- The following capabilities are not available for now:
-    - You can't run terraform
-    - You can't access terraform state
-- This project uses `pyright` as type checker (`pyright` isn't runnable though, because node is not installed, so skip it)
+- Terraform state, `terraform apply` and anything that requires authentication is unavailable in the current container environment
+- This project uses `pyright` as type checker and `pytest` for unit testing.
+- Packages may be installed but should be documented in the dockerfile located in this directory
+- Changes to the databricks pipeline may require the tests in databricks/tests to be updated accordingly
