@@ -134,6 +134,23 @@ resource "databricks_schema" "gold" {
   name         = "gold"
 }
 
+# DATABRICKS SERVICE PRINCIPAL FOR POWER BI
+
+resource "databricks_service_principal" "powerbi" {
+  display_name = "PowerBI Service Principal"
+  workspace_access      = true
+  databricks_sql_access = true
+}
+
+resource "databricks_catalog_grant" "powerbi" {
+  catalog_name = databricks_catalog.weathercatalog.name
+
+  grant {
+    principal  = databricks_service_principal.powerbi.display_name
+    privileges = ["USE CATALOG", "USE SCHEMA", "SELECT"]
+  }
+}
+
 # DATABRICKS PIPELINE SOURCE FILES
 
 locals {
