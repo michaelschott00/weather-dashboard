@@ -82,19 +82,15 @@ def test_silver_weather_hourly_explodes_and_parses_timestamp(spark):
     assert out.count() == 2
     rows = {r.time.hour: r for r in out.collect()}
 
-    assert rows[13].source_file_timestamp == \
-        datetime(2026, 8, 28, 13, 5, 0)
     assert rows[13].temperature_2m == "20.5"
     assert rows[13].relative_humidity_2m == "60.0"
 
-    assert rows[14].source_file_timestamp == \
-        datetime(2026, 8, 28, 13, 5, 0)
     assert rows[14].temperature_2m == "21.0"
     assert rows[14].surface_pressure == "1011.0"
 
-    # source_file_timestamp is carried from the filename
-    assert out.select("source_file_timestamp").first()[0] == \
-        datetime(2026, 8, 28, 13, 5, 0)
+    # source_file_timestamp is now in metadata, not hourly
+    assert "source_file_timestamp" not in out.columns
+    assert "_source_file" in out.columns
 
 
 def _aq_bronze_df(spark):
@@ -137,6 +133,10 @@ def test_silver_aq_hourly_explodes_and_parses_timestamp(spark):
     assert rows[13].pm2_5 == "10.0"
     assert rows[13].ozone == "30.0"
     assert rows[14].european_aqi == "21"
+
+    # source_file_timestamp is now in metadata, not hourly
+    assert "source_file_timestamp" not in out.columns
+    assert "_source_file" in out.columns
 
 
 WEATHER_UNITS_FIELDS = [
@@ -257,6 +257,7 @@ def test_silver_weather_metadata_selects_metadata_columns(spark):
     assert row.latitude == 52.52
     assert row.timezone == "Europe/Berlin"
     assert row.elevation == 38.0
+    assert row.source_file_timestamp == datetime(2026, 8, 28, 13, 5, 0)
     assert set(out.columns) == {
         "_source_file",
         "latitude",
@@ -266,6 +267,7 @@ def test_silver_weather_metadata_selects_metadata_columns(spark):
         "timezone",
         "timezone_abbreviation",
         "elevation",
+        "source_file_timestamp",
     }
 
 
@@ -298,6 +300,7 @@ def test_silver_aq_metadata_selects_metadata_columns(spark):
     row = out.first()
     assert row.latitude == 52.52
     assert row.timezone == "Europe/Berlin"
+    assert row.source_file_timestamp == datetime(2026, 8, 28, 13, 5, 0)
     assert set(out.columns) == {
         "_source_file",
         "latitude",
@@ -307,4 +310,33 @@ def test_silver_aq_metadata_selects_metadata_columns(spark):
         "timezone",
         "timezone_abbreviation",
         "elevation",
+        "source_file_timestamp",
     }
+
+
+def test_silver_weather_metadata_parses_source_timestamp(spark):
+    df = spark.createDataFrame(
+        [
+            ("/path/weather_2026-08-28_13-05-00.json", 52.52, 13.41, 42, 3600, "Europe/Berlin", "CEST", 38.0),
+            ("/path/other.json", 52.52, 13.41, 42, 3600, "Europe/Berlin", "CEST", 38.0),
+        ],
+        ["_source_file", "latitude", "longitude", "generationtime_ms", "utc_offset_seconds", "timezone", "timezone_abbreviation", "elevation"],
+    )
+    out = silver_weather_metadata.compute_silver_weather_metadata(df)
+    rows = {r._source_file: r for r in out.collect()}
+    assert rows["/path/weather_2026-08-28_13-05-00.json"].source_file_timestamp == datetime(2026, 8, 28, 13, 5, 0)
+    assert rows["/path/other.json"].source_file_timestamp is None
+
+
+def test_silver_aq_metadata_parses_source_timestamp(spark):
+    df = spark.createDataFrame(
+        [
+            ("/path/aq_2026-08-28_13-05-00.json", 52.52, 13.41, 42, 3600, "Europe/Berlin", "CEST", 38.0),
+            ("/path/other.json", 52.52, 13.41, 42, 3600, "Europe/Berlin", "CEST", 38.0),
+        ],
+        ["_source_file", "latitude", "longitude", "generationtime_ms", "utc_offset_seconds", "timezone", "timezone_abbreviation", "elevation"],
+    )
+    out = silver_aq_metadata.compute_silver_aq_metadata(df)
+    rows = {r._source_file: r for r in out.collect()}
+    assert rows["/path/aq_2026-08-28_13-05-00.json"].source_file_timestamp == datetime(2026, 8, 28, 13, 5, 0)
+    assert rows["/path/other.json"].source_file_timestamp is None

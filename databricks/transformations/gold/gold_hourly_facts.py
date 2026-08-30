@@ -6,7 +6,6 @@ from pyspark.sql import SparkSession
 from transformations._columns import (
     WEATHER_MEASUREMENT_COLUMNS,
     AQ_MEASUREMENT_COLUMNS,
-    latest_file_per_day,
 )
 
 spark: SparkSession
@@ -51,14 +50,40 @@ def compute_gold_hourly_facts(weather, aq):
     )
 
 
+def _latest_hourly(spark, hourly_table, metadata_table):
+    """Return hourly rows filtered to the newest source file per measurement day.
+
+    Joins the hourly table with its metadata table on _source_file to obtain
+    source_file_timestamp (now stored in metadata) and keeps only the newest
+    file for each measurement day. Rows with null timestamp are dropped.
+    """
+    hourly = spark.read.table(hourly_table)
+    meta = spark.read.table(metadata_table).select(
+        "_source_file", "source_file_timestamp"
+    )
+    df = hourly.join(meta, on="_source_file", how="inner").filter(
+        F.col("source_file_timestamp").isNotNull()
+    )
+    window = Window.partitionBy(F.to_date("time"))
+    return (
+        df.withColumn(
+            "latest_source_file_timestamp",
+            F.max("source_file_timestamp").over(window),
+        )
+        .filter(F.col("source_file_timestamp") == F.col("latest_source_file_timestamp"))
+        .drop("latest_source_file_timestamp")
+    )
+
+
 @dp.materialized_view(
     name="weather.gold.gold_hourly_facts",
     comment="Gold layer: fact table with hourly weather and air quality measurements joined on timestamp."
 )
 def gold_hourly_facts():
-    # Batch read from silver streaming tables and keep only the newest source file
-    # for each measurement day before joining weather and air quality rows.
+    # Batch read from silver streaming/hourly and metadata tables, join to obtain
+    # source_file_timestamp (now stored in metadata), and keep only the newest
+    # source file for each measurement day before joining weather and air quality.
     # Filter out rows with null source_file_timestamp (old data before timestamp was added).
-    weather = latest_file_per_day(spark, "silver_weather_hourly")
-    aq = latest_file_per_day(spark, "silver_aq_hourly")
+    weather = _latest_hourly(spark, "silver_weather_hourly", "silver_weather_metadata")
+    aq = _latest_hourly(spark, "silver_aq_hourly", "silver_aq_metadata")
     return compute_gold_hourly_facts(weather, aq)
