@@ -1,6 +1,4 @@
-The following capabilities are not available for now:
-
-- You can't run terraform
-- You can't access terraform state
-
-This project uses `pyright` as type checker.
+- The following capabilities are not available for now:
+    - You can't run terraform
+    - You can't access terraform state
+- This project uses `pyright` as type checker (`pyright` isn't runnable though, because node is not installed, so skip it)
