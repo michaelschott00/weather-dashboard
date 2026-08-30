@@ -6,6 +6,9 @@ from conftest import load_transformations_module
 
 gold_hourly_facts = load_transformations_module("transformations.gold.gold_hourly_facts")
 gold_time_dim = load_transformations_module("transformations.gold.gold_time_dim")
+gold_thresholds_dim = load_transformations_module(
+    "transformations.gold.gold_thresholds_dim"
+)
 
 
 def _weather_df(spark):
@@ -90,20 +93,14 @@ def test_gold_hourly_facts_has_all_expected_columns(spark):
     assert {"temperature_2m", "pm2_5", "european_aqi"} <= cols
     assert "surface_pressure_delta" in cols
 
-    # The trapezoid parameter columns are constant literals.
-    first = out.first()
-    assert first.apparent_temperature_peak_start == 15
-    assert first.apparent_temperature_peak_end == 22
-    assert first.surface_pressure_peak_start == 1020
-    assert first.surface_pressure_peak_end == 1030
-    assert first.european_aqi_peak_start == 0
-    assert first.european_aqi_peak_end == 25
-    assert first.cloud_cover_peak_start == 0
-    assert first.cloud_cover_peak_end == 50
-    assert first.relative_humidity_2m_peak_start == 40
-    assert first.relative_humidity_2m_peak_end == 60
-    assert first.wind_speed_10m_peak_start == 12
-    assert first.wind_speed_10m_peak_end == 19
+    # The trapezoid parameter columns live in the thresholds dimension, not here.
+    assert not any(
+        c.endswith(
+            ("_pos_slope_start", "_pos_slope_end", "_neg_slope_start",
+             "_neg_slope_end", "_peak_start", "_peak_end")
+        )
+        for c in cols
+    )
 
 
 def test_gold_time_dim_derives_attributes(spark):
@@ -131,3 +128,47 @@ def test_gold_time_dim_derives_attributes(spark):
     assert r.month == 1
     assert r.year == 2026
     assert r.week == 1
+
+
+def test_gold_thresholds_dim_has_one_row_per_metric(spark):
+    out = gold_thresholds_dim.compute_gold_thresholds_dim(spark)
+
+    metrics = [r.metric for r in out.orderBy("metric").collect()]
+    assert metrics == [
+        "apparent_temperature",
+        "cloud_cover",
+        "european_aqi",
+        "relative_humidity_2m",
+        "surface_pressure",
+        "surface_pressure_delta",
+        "wind_speed_10m",
+    ]
+
+
+def test_gold_thresholds_dim_contains_trapezoid_parameters(spark):
+    out = gold_thresholds_dim.compute_gold_thresholds_dim(spark)
+    by_metric = {r.metric: r for r in out.collect()}
+
+    temp = by_metric["apparent_temperature"]
+    assert temp.pos_slope_start == 10
+    assert temp.pos_slope_end == 15
+    assert temp.peak_start == 15
+    assert temp.peak_end == 22
+    assert temp.neg_slope_start == 22
+    assert temp.neg_slope_end == 26
+
+    pres = by_metric["surface_pressure"]
+    assert pres.pos_slope_start == 1010
+    assert pres.pos_slope_end == 1020
+    assert pres.peak_start == 1020
+    assert pres.peak_end == 1030
+    assert pres.neg_slope_start is None
+    assert pres.neg_slope_end is None
+
+    aqi = by_metric["european_aqi"]
+    assert aqi.pos_slope_start is None
+    assert aqi.pos_slope_end is None
+    assert aqi.peak_start == 0
+    assert aqi.peak_end == 25
+    assert aqi.neg_slope_start == 25
+    assert aqi.neg_slope_end == 100
