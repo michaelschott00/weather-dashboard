@@ -55,18 +55,34 @@ def _latest_hourly(spark, hourly_table, metadata_table):
 
     Joins the hourly table with its metadata table on _source_file to obtain
     source_file_timestamp (now stored in metadata) and keeps only the newest
-    file for each measurement day. Rows with null timestamp are dropped.
+    file for each measurement day. Older rows written before the timestamp
+    moved into metadata may still carry their own legacy source_file_timestamp
+    column, so coalesce the two (metadata wins) before selecting. Rows with a
+    null timestamp are dropped.
     """
     hourly = spark.read.table(hourly_table)
     meta = spark.read.table(metadata_table).select(
-        "_source_file", "source_file_timestamp"
+        "_source_file",
+        F.col("source_file_timestamp").alias("metadata_source_file_timestamp"),
     )
-    df = hourly.join(meta, on="_source_file", how="inner").filter(
-        F.col("source_file_timestamp").isNotNull()
-    )
+    df = hourly.join(meta, on="_source_file", how="inner")
+    if "source_file_timestamp" in hourly.columns:
+        # Legacy hourly rows: prefer the metadata timestamp but fall back to the
+        # legacy hourly value so no old data is dropped when metadata is null.
+        df = df.withColumn(
+            "source_file_timestamp",
+            F.coalesce(
+                F.col("metadata_source_file_timestamp"),
+                F.col("source_file_timestamp"),
+            ),
+        )
+    else:
+        df = df.withColumn("source_file_timestamp", F.col("metadata_source_file_timestamp"))
+    df = df.drop("metadata_source_file_timestamp")
     window = Window.partitionBy(F.to_date("time"))
     return (
-        df.withColumn(
+        df.filter(F.col("source_file_timestamp").isNotNull())
+        .withColumn(
             "latest_source_file_timestamp",
             F.max("source_file_timestamp").over(window),
         )

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from pyspark.sql import functions as F
+from pyspark.sql.types import StringType, StructField, StructType, TimestampType
 
 from conftest import load_transformations_module
 
@@ -81,6 +82,87 @@ def test_gold_hourly_facts_surface_pressure_delta_lag(spark):
     assert by_time[datetime(2026, 8, 28, 13, 0, 0)].surface_pressure_delta is None
     assert by_time[datetime(2026, 8, 28, 14, 0, 0)].surface_pressure_delta == 1012.0 - 1013.0
     assert by_time[datetime(2026, 8, 28, 15, 0, 0)].surface_pressure_delta == 1011.0 - 1012.0
+
+
+def _latest_hourly_expectation(with_legacy_timestamp):
+    # 2026-08-28 has two files; newer file (05:00) must win. A legacy hourly
+    # timestamp (05:11) must NOT override the metadata timestamp, except for
+    # weather_old.json where metadata is null and the legacy value survives.
+    expected = [
+        (datetime(2026, 8, 28, 5, 0, 0), datetime(2026, 8, 28, 0, 0, 0)),
+        (datetime(2026, 8, 28, 5, 0, 0), datetime(2026, 8, 28, 1, 0, 0)),
+        (datetime(2026, 8, 27, 12, 0, 0), datetime(2026, 8, 27, 0, 0, 0)),
+    ]
+    if with_legacy_timestamp:
+        expected.append(
+            (datetime(2026, 8, 26, 9, 0, 0), datetime(2026, 8, 26, 0, 0, 0))
+        )
+    return expected
+
+
+def _register_latest_hourly_views(spark, with_legacy_timestamp):
+    hourly_schema = StructType(
+        [
+            StructField("_source_file", StringType()),
+            StructField("time", TimestampType()),
+            StructField("source_file_timestamp", TimestampType()),
+        ]
+        if with_legacy_timestamp
+        else [
+            StructField("_source_file", StringType()),
+            StructField("time", TimestampType()),
+        ]
+    )
+    legacy = datetime(2026, 8, 28, 5, 11, 0), datetime(2026, 8, 28, 5, 11, 0), \
+        datetime(2026, 8, 28, 5, 11, 0), datetime(2026, 8, 27, 12, 11, 0), \
+        datetime(2026, 8, 26, 9, 0, 0)
+    hourly_rows = [
+        ("weather_2026-08-28_04-00-00.json", datetime(2026, 8, 28, 0, 0, 0)),
+        ("weather_2026-08-28_05-00-00.json", datetime(2026, 8, 28, 0, 0, 0)),
+        ("weather_2026-08-28_05-00-00.json", datetime(2026, 8, 28, 1, 0, 0)),
+        ("weather_2026-08-27_12-00-00.json", datetime(2026, 8, 27, 0, 0, 0)),
+        ("weather_old.json", datetime(2026, 8, 26, 0, 0, 0)),
+    ]
+    if with_legacy_timestamp:
+        hourly_rows = [row + (ts,) for row, ts in zip(hourly_rows, legacy)]
+    spark.createDataFrame(hourly_rows, hourly_schema) \
+        .createOrReplaceTempView("_test_lh_hourly")
+
+    meta_schema = StructType(
+        [
+            StructField("_source_file", StringType()),
+            StructField("source_file_timestamp", TimestampType()),
+        ]
+    )
+    spark.createDataFrame(
+        [
+            ("weather_2026-08-28_04-00-00.json", datetime(2026, 8, 28, 4, 0, 0)),
+            ("weather_2026-08-28_05-00-00.json", datetime(2026, 8, 28, 5, 0, 0)),
+            ("weather_2026-08-27_12-00-00.json", datetime(2026, 8, 27, 12, 0, 0)),
+            ("weather_old.json", None),
+        ],
+        meta_schema,
+    ).createOrReplaceTempView("_test_lh_metadata")
+
+
+def test_latest_hourly_with_legacy_hourly_timestamp_column(spark):
+    _register_latest_hourly_views(spark, with_legacy_timestamp=True)
+    out = gold_hourly_facts._latest_hourly(
+        spark, "_test_lh_hourly", "_test_lh_metadata"
+    )
+    result = sorted((r.source_file_timestamp, r.time) for r in out.collect())
+    assert result == sorted(_latest_hourly_expectation(with_legacy_timestamp=True))
+    assert "latest_source_file_timestamp" not in out.columns
+
+
+def test_latest_hourly_without_legacy_hourly_timestamp_column(spark):
+    _register_latest_hourly_views(spark, with_legacy_timestamp=False)
+    out = gold_hourly_facts._latest_hourly(
+        spark, "_test_lh_hourly", "_test_lh_metadata"
+    )
+    result = sorted((r.source_file_timestamp, r.time) for r in out.collect())
+    assert result == sorted(_latest_hourly_expectation(with_legacy_timestamp=False))
+    assert "latest_source_file_timestamp" not in out.columns
 
 
 def test_gold_hourly_facts_has_all_expected_columns(spark):
