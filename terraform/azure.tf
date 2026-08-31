@@ -15,7 +15,7 @@ terraform {
     }
   }
   backend "local" {
-    path = "../terraform-state/terraform.tfstate"
+    path = "../../terraform-state/terraform.tfstate"
   }
 }
 
@@ -106,16 +106,16 @@ resource "databricks_storage_credential" "sc" {
 }
 
 resource "databricks_external_location" "dl" {
-  name = "AzureDataLake"
-  url = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net"
+  name            = "AzureDataLake"
+  url             = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net"
   credential_name = databricks_storage_credential.sc.id
   comment         = "Managed by TF"
   depends_on      = [azurerm_role_assignment.ac_dl_contributor]
 }
 
 resource "databricks_catalog" "weathercatalog" {
-  name    = "weather"
-  comment = "Catalog for the weather dashboard medallion architecture."
+  name         = "weather"
+  comment      = "Catalog for the weather dashboard medallion architecture."
   storage_root = "${databricks_external_location.dl.url}catalog"
 }
 
@@ -137,17 +137,44 @@ resource "databricks_schema" "gold" {
 # DATABRICKS SERVICE PRINCIPAL FOR POWER BI
 
 resource "databricks_service_principal" "powerbi" {
-  display_name = "PowerBI Service Principal"
+  display_name          = "PowerBI Service Principal"
   workspace_access      = true
   databricks_sql_access = true
 }
 
-resource "databricks_catalog_grant" "powerbi" {
-  catalog_name = databricks_catalog.weathercatalog.name
+resource "databricks_grants" "powerbi_catalog" {
+  catalog = databricks_catalog.weathercatalog.name
 
   grant {
-    principal  = databricks_service_principal.powerbi.display_name
-    privileges = ["USE CATALOG", "USE SCHEMA", "SELECT"]
+    principal  = databricks_service_principal.powerbi.application_id
+    privileges = ["USE CATALOG"]
+  }
+}
+
+resource "databricks_grants" "powerbi_bronze" {
+  schema = "${databricks_catalog.weathercatalog.name}.${databricks_schema.bronze.name}"
+
+  grant {
+    principal  = databricks_service_principal.powerbi.application_id
+    privileges = ["USE SCHEMA", "SELECT"]
+  }
+}
+
+resource "databricks_grants" "powerbi_silver" {
+  schema = "${databricks_catalog.weathercatalog.name}.${databricks_schema.silver.name}"
+
+  grant {
+    principal  = databricks_service_principal.powerbi.application_id
+    privileges = ["USE SCHEMA", "SELECT"]
+  }
+}
+
+resource "databricks_grants" "powerbi_gold" {
+  schema = "${databricks_catalog.weathercatalog.name}.${databricks_schema.gold.name}"
+
+  grant {
+    principal  = databricks_service_principal.powerbi.application_id
+    privileges = ["USE SCHEMA", "SELECT"]
   }
 }
 
@@ -172,11 +199,11 @@ resource "databricks_pipeline" "weather_pipeline" {
   schema     = databricks_schema.silver.name
   photon     = true
   serverless = true
-  root_path = "/Shared/weather_pipeline"
+  root_path  = "/Shared/weather_pipeline"
 
   configuration = {
-    bronze_base_path = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net/bronze/"
-    "pipelines.maxFlowRetryAttempts" = 0
+    bronze_base_path                   = "abfss://${azurerm_storage_data_lake_gen2_filesystem.fs.name}@${azurerm_storage_account.dl.name}.dfs.core.windows.net/bronze/"
+    "pipelines.maxFlowRetryAttempts"   = 0
     "pipelines.numUpdateRetryAttempts" = 0
     "pipelines.numStreamRetryAttempts" = 0
   }
@@ -196,7 +223,7 @@ resource "databricks_job" "weather_job" {
   name = "OpenMeteo API Job"
 
   task {
-    task_key = "openmeteoapi"
+    task_key    = "openmeteoapi"
     max_retries = 0
     pipeline_task {
       pipeline_id = databricks_pipeline.weather_pipeline.id
@@ -299,6 +326,22 @@ resource "azapi_resource" "aq" {
   }
 }
 
+resource "azapi_resource" "fchist" {
+  name      = "OpenMeteoHistoricalForecastLinkedService"
+  type      = "Microsoft.DataFactory/factories/linkedservices@2018-06-01"
+  parent_id = azurerm_data_factory.df.id
+
+  body = {
+    properties = {
+      type = "HttpServer"
+      typeProperties = {
+        url                = "https://historical-forecast-api.open-meteo.com/"
+        authenticationType = "Anonymous"
+      }
+    }
+  }
+}
+
 # DATA FACTORY DATASETS
 
 resource "azapi_resource" "srcfc" {
@@ -337,7 +380,7 @@ resource "azapi_resource" "srcfc" {
       type        = "Json"
       typeProperties = {
         location = {
-          type = "HttpServerLocation"
+          type        = "HttpServerLocation"
           relativeUrl = "v1/forecast?latitude=@{dataset().latitude}&longitude=@{dataset().longitude}&timezone=@{dataset().timezone}&forecast_days=@{dataset().forecast_days}&hourly=@{dataset().hourly}"
         }
       }
@@ -386,7 +429,7 @@ resource "azapi_resource" "srcaq" {
       type        = "Json"
       typeProperties = {
         location = {
-          type = "HttpServerLocation"
+          type        = "HttpServerLocation"
           relativeUrl = "v1/air-quality?latitude=@{dataset().latitude}&longitude=@{dataset().longitude}&hourly=@{dataset().hourly}&timezone=@{dataset().timezone}&forecast_days=@{dataset().forecast_days}&domains=@{dataset().domains}"
         }
       }
@@ -536,6 +579,295 @@ resource "azurerm_data_factory_pipeline" "om" {
                     },
                     {
                         "activity": "OpenMeteo Air Quality Ingestion Pipeline",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "jobId": "${databricks_job.weather_job.id}"
+                },
+                "linkedServiceName": {
+                    "referenceName": "${azapi_resource.dbls.name}",
+                    "type": "LinkedServiceReference"
+                }
+            }
+]
+  JSON
+}
+
+# DATA FACTORY SCHEDULE TRIGGER (daily)
+
+resource "azurerm_data_factory_trigger_schedule" "daily" {
+  name            = "WeatherDailyTrigger"
+  data_factory_id = azurerm_data_factory.df.id
+  pipeline_name   = azurerm_data_factory_pipeline.om.name
+  interval        = 1
+  frequency       = "Day"
+  start_time      = "2026-08-31T00:05:00Z"
+  schedule {
+    minutes = [5]
+    hours   = [0]
+  }
+}
+
+# DATA FACTORY BACKFILL SOURCE DATASETS
+# Reuse the historical forecast / air-quality endpoints which return the same
+# JSON shape as the forecast endpoints, but go back to a given start_date.
+# start_date/end_date are mutually exclusive with forecast_days, so it is
+# omitted here.
+
+resource "azapi_resource" "srchistfc" {
+  name      = "OpenMeteoWeatherBackfillSource"
+  type      = "Microsoft.DataFactory/factories/datasets@2018-06-01"
+  parent_id = azurerm_data_factory.df.id
+  body = {
+    properties = {
+      linkedServiceName = {
+        referenceName = "${azapi_resource.fchist.name}"
+        type          = "LinkedServiceReference"
+      }
+      parameters = {
+        latitude = {
+          type         = "string"
+          defaultValue = var.LATITUDE
+        }
+        longitude = {
+          type         = "string"
+          defaultValue = var.LONGITUDE
+        }
+        hourly = {
+          type         = "string"
+          defaultValue = "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure,cloud_cover,uv_index"
+        }
+        timezone = {
+          type         = "string"
+          defaultValue = "Europe/Berlin"
+        }
+        start_date = {
+          type = "string"
+        }
+        end_date = {
+          type = "string"
+        }
+      }
+      annotations = []
+      type        = "Json"
+      typeProperties = {
+        location = {
+          type        = "HttpServerLocation"
+          relativeUrl = "v1/forecast?latitude=@{dataset().latitude}&longitude=@{dataset().longitude}&timezone=@{dataset().timezone}&start_date=@{dataset().start_date}&end_date=@{dataset().end_date}&hourly=@{dataset().hourly}"
+        }
+      }
+      schema = {}
+    }
+  }
+}
+
+resource "azapi_resource" "srchistaq" {
+  name      = "OpenMeteoAirQualityBackfillSource"
+  type      = "Microsoft.DataFactory/factories/datasets@2018-06-01"
+  parent_id = azurerm_data_factory.df.id
+  body = {
+    properties = {
+      linkedServiceName = {
+        referenceName = "${azapi_resource.aq.name}"
+        type          = "LinkedServiceReference"
+      }
+      parameters = {
+        latitude = {
+          type         = "string"
+          defaultValue = var.LATITUDE
+        }
+        longitude = {
+          type         = "string"
+          defaultValue = var.LONGITUDE
+        }
+        hourly = {
+          type         = "string"
+          defaultValue = "pm2_5,ozone,european_aqi"
+        }
+        timezone = {
+          type         = "string"
+          defaultValue = "Europe/Berlin"
+        }
+        domains = {
+          type         = "string"
+          defaultValue = "cams_europe"
+        }
+        start_date = {
+          type = "string"
+        }
+        end_date = {
+          type = "string"
+        }
+      }
+      annotations = []
+      type        = "Json"
+      typeProperties = {
+        location = {
+          type        = "HttpServerLocation"
+          relativeUrl = "v1/air-quality?latitude=@{dataset().latitude}&longitude=@{dataset().longitude}&hourly=@{dataset().hourly}&timezone=@{dataset().timezone}&start_date=@{dataset().start_date}&end_date=@{dataset().end_date}&domains=@{dataset().domains}"
+        }
+      }
+      schema = {}
+    }
+  }
+}
+
+# DATA FACTORY BACKFILL PIPELINE
+# Parameterized with start_date/end_date so a single manual trigger run can
+# backfill an arbitrary date range (e.g. 2026-05-01 .. today). Writes to the
+# same bronze sink files, which the Auto Loader bronze tables pick up on the
+# next pipeline run.
+
+resource "azurerm_data_factory_pipeline" "om_bf" {
+  name            = "openmeteobackfillpipeline"
+  data_factory_id = azurerm_data_factory.df.id
+
+  parameters = {
+    start_date = "string"
+    end_date   = "string"
+  }
+
+  activities_json = <<JSON
+  [
+            {
+                "name": "OpenMeteo Weather Backfill",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "JsonSource",
+                        "storeSettings": {
+                            "type": "HttpReadSettings",
+                            "requestMethod": "GET"
+                        },
+                        "formatSettings": {
+                            "type": "JsonReadSettings",
+                            "compressionProperties": null
+                        }
+                    },
+                    "sink": {
+                        "type": "JsonSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "JsonWriteSettings"
+                        }
+                    },
+                    "enableStaging": false
+                },
+                "inputs": [
+                    {
+                        "referenceName": "${azapi_resource.srchistfc.name}",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "start_date": {
+                                "value": "@pipeline().parameters.start_date",
+                                "type": "Expression"
+                            },
+                            "end_date": {
+                                "value": "@pipeline().parameters.end_date",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "${azurerm_data_factory_dataset_json.snkfc.name}",
+                        "type": "DatasetReference"
+                    }
+                ]
+            },
+            {
+                "name": "OpenMeteo Air Quality Backfill",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "JsonSource",
+                        "storeSettings": {
+                            "type": "HttpReadSettings",
+                            "requestMethod": "GET"
+                        },
+                        "formatSettings": {
+                            "type": "JsonReadSettings",
+                            "compressionProperties": null
+                        }
+                    },
+                    "sink": {
+                        "type": "JsonSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "JsonWriteSettings"
+                        }
+                    },
+                    "enableStaging": false
+                },
+                "inputs": [
+                    {
+                        "referenceName": "${azapi_resource.srchistaq.name}",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "start_date": {
+                                "value": "@pipeline().parameters.start_date",
+                                "type": "Expression"
+                            },
+                            "end_date": {
+                                "value": "@pipeline().parameters.end_date",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "${azurerm_data_factory_dataset_json.snkaq.name}",
+                        "type": "DatasetReference"
+                    }
+                ]
+            },
+            {
+                "name": "ETL",
+                "type": "DatabricksJob",
+                "dependsOn": [
+                    {
+                        "activity": "OpenMeteo Weather Backfill",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "OpenMeteo Air Quality Backfill",
                         "dependencyConditions": [
                             "Succeeded"
                         ]
