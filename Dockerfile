@@ -9,6 +9,17 @@ RUN curl -fsSLO https://releases.hashicorp.com/terraform/1.16.0/terraform_1.16.0
     && unzip terraform_1.16.0_linux_amd64.zip \
     && mv terraform /usr/bin
 
+# draw.io Desktop CLI (drawio) for the drawio skill (.opencode/skills/drawio).
+# drawio-desktop is only packaged in Alpine's edge/testing repo, so enable the
+# edge main/community/testing repos in addition to the v3.24 stable repos.
+# It is an Electron app, so headless CLI use (Mermaid -> .drawio, ELK --layout,
+# PNG/SVG/PDF export) requires an X server (xvfb) plus fontconfig and a font so
+# exported diagrams render text.
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
+    && echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
+    && echo "https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
+    && apk add --update --no-cache drawio-desktop xvfb fontconfig ttf-dejavu
+
 # Install python packages
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \

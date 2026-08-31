@@ -2,3 +2,5 @@
 - This project uses `pyright` as type checker and `pytest` for unit testing.
 - Packages may be installed but should be documented in the dockerfile located in this directory
 - Changes to the databricks pipeline may require the tests in databricks/tests to be updated accordingly
+- Terraform databricks docs: https://registry.terraform.io/providers/databricks/databricks/latest/docs
+- Terraform azurerm docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs

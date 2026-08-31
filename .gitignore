@@ -264,3 +264,5 @@ __marimo__/
 .streamlit/secrets.toml
 tests/data/
 .vscode/settings.json
+/assets/.$architecture.drawio.bkp
+/assets/architecture.png
