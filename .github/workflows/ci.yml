@@ -77,7 +77,7 @@ jobs:
             echo "### Plan Details"
             echo ""
             echo '```hcl'
-            terraform show -chdir=terraform -no-color tfplan
+            terraform -chdir=terraform show -no-color tfplan
             echo '```'
             echo ""
             echo "Merge this PR to apply the changes."
