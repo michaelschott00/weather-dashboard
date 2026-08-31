@@ -272,3 +272,5 @@ tests/data/
 *.svg
 *.pdf
 *.dtmp
+!assets/azure-architecture.png
+.opencode

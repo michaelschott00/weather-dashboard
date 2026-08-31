@@ -1,7 +1,8 @@
-- This environment is a docker container built from the Dockerfile and compose.yaml in this directory. All changes to the environment should be documented in these files. `docker` itself is unavailable.
-- Terraform state, `terraform apply` and anything that requires authentication is unavailable in the current container environment
-- To run the drawio CLI headlessly: `ELECTRON_DISABLE_SANDBOX=1 xvfb-run -a drawio ...` (Electron sandbox is blocked in the container, and an X display is required). Avoid `-e`/`--embed-diagram` for PNG output — it crashes this drawio build; use SVG export instead. If `xvfb-run` is missing, install the `xorg-server-xvfb` package (the `xvfb-run` wrapper is sometimes packaged separately from `xvfb`).
+- This environment is a docker container built from `Dockerfile` and `compose.yaml` in this directory. All changes to the environment should be documented in these files. The `docker` command itself is not available.
+- Terraform state, `terraform apply` and anything that requires authentication is not available.
+- Install python packages with `--break-system-packages`. Add any installed packages to `requirements.txt`.
+- To run the drawio CLI headlessly: `ELECTRON_DISABLE_SANDBOX=1 xvfb-run -a drawio ...` (Electron sandbox is blocked in the container, and an X display is required). Avoid `-e`/`--embed-diagram` for PNG output — it crashes this drawio build. If `xvfb-run` is missing, install the `xorg-server-xvfb` package (the `xvfb-run` wrapper is sometimes packaged separately from `xvfb`).
 - This project uses `pyright` as type checker and `pytest` for unit testing.
 - Changes to the databricks pipeline may require the tests in databricks/tests to be updated accordingly
-- Terraform databricks docs: https://registry.terraform.io/providers/databricks/databricks/latest/docs
-- Terraform azurerm docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
+- Terraform databricks docs: <https://registry.terraform.io/providers/databricks/databricks/latest/docs>
+- Terraform azurerm docs: <https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs>
