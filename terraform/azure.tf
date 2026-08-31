@@ -60,7 +60,7 @@ resource "azurerm_storage_account" "dl" {
   is_hns_enabled           = true
 }
 
-resource "azurerm_storage_container" "state" {
+resource "azurerm_storage_data_lake_gen2_filesystem" "state" {
   name               = "tfstate"
   storage_account_id = azurerm_storage_account.dl.id
 }
