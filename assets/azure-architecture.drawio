@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" version="22.1.0">
+  <diagram name="Page-1" id="arch-1">
+    <mxGraphModel dx="1420" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1160" pageHeight="640" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="&lt;b&gt;Weather Dashboard — High-Level Architecture&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#202A44;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="260" y="12" width="640" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="Open-Meteo ingestion → ADLS Gen2 (Medallion) → Databricks → Power BI  •  Orchestrated by Azure Data Factory  •  Region: Germany West Central" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#5a6475;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="200" y="36" width="760" height="16" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="openMeteo" value="Open-Meteo APIs&#xa;Forecast / Air-Quality /&amp;#xa;Historical Forecast" style="aspect=fixed;sketch=0;html=1;dashed=0;whitespace=wrap;verticalLabelPosition=bottom;verticalAlign=top;fillColor=#2875E2;strokeColor=#ffffff;points=[[0.005,0.63,0],[0.1,0.2,0],[0.9,0.2,0],[0.5,0,0],[0.995,0.63,0],[0.72,0.99,0],[0.5,1,0],[0.28,0.99,0]];shape=mxgraph.kubernetes.icon2;prIcon=api;fontFamily=Helvetica;fontSize=11;fontColor=#2d3748;whiteSpace=wrap;align=center;" vertex="1" parent="1">
+          <mxGeometry x="30" y="120" width="72" height="72" as="geometry"/>
+        </mxCell>
+        <mxCell id="openMeteoLabel2" value="HTTPS • JSON&#xa;Anonymous" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#6b7280;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="20" y="202" width="92" height="26" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rg" value="Azure  •  Resource Group: WeatherDashboard  (Germany West Central)  •  Terraform (azurerm + azapi + databricks)" style="swimlane;startSize=28;horizontal=1;html=1;fillColor=#f0f4f8;strokeColor=#9aa9bf;strokeWidth=1.2;rounded=1;opacity=45;fontFamily=Helvetica;fontSize=11;fontStyle=1;fontColor=#2d3748;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="150" y="82" width="760" height="380" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="adf" value="Azure Data&#xa;Factory&#xa;weatherorchestrator" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=default;imageAspect=0;aspect=fixed;image=https://app.diagrams.net/img/lib/azure2/databases/Data_Factory.svg;fontFamily=Helvetica;fontSize=11;fontColor=#2d3748;whiteSpace=wrap;align=center;" vertex="1" parent="rg">
+          <mxGeometry x="44" y="54" width="64" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="adfMeta" value="Copy + DatabricksJob&#xa;Daily 00:05 UTC" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#5a6475;whiteSpace=wrap;" vertex="1" parent="rg">
+          <mxGeometry x="22" y="136" width="108" height="26" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="adls" value="ADLS Gen2&#xa;weatherdatalake / main&#xa;bronze • catalog" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=default;imageAspect=0;aspect=fixed;image=https://app.diagrams.net/img/lib/azure2/storage/Storage_Accounts.svg;fontFamily=Helvetica;fontSize=11;fontColor=#2d3748;whiteSpace=wrap;align=center;" vertex="1" parent="rg">
+          <mxGeometry x="212" y="54" width="64" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="adlsMeta" value="Delta + JSON&#xa;Unity Catalog storage root" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#5a6475;whiteSpace=wrap;" vertex="1" parent="rg">
+          <mxGeometry x="190" y="136" width="108" height="26" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ws" value="Azure Databricks  —  Serverless • Photon  •  Unity Catalog: weather  (bronze / silver / gold)  •  DLT Pipeline: Weather pipeline" style="swimlane;startSize=30;horizontal=1;html=1;fillColor=#fff7ed;strokeColor=#d6b48d;strokeWidth=1.1;rounded=1;opacity=55;fontFamily=Helvetica;fontSize=11;fontStyle=1;fontColor=#4a3720;whiteSpace=wrap;align=center;" vertex="1" parent="rg">
+          <mxGeometry x="372" y="40" width="340" height="308" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="wsIcon" value="Databricks&#xa;Workspace&#xa;weatherworkspace (trial)" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=default;imageAspect=0;aspect=fixed;image=https://app.diagrams.net/img/lib/azure2/analytics/Azure_Databricks.svg;fontFamily=Helvetica;fontSize=11;fontColor=#2d3748;whiteSpace=wrap;align=center;" vertex="1" parent="ws">
+          <mxGeometry x="16" y="44" width="64" height="64" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bronze" value="Bronze&#xa;Auto Loader on /bronze" style="rounded=1;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=11;fontColor=#6b4a1f;fillColor=#f5d6a0;strokeColor=#c9a86a;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="ws">
+          <mxGeometry x="104" y="42" width="210" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="bronzeDesc" value="raw JSON → Delta bronze tables" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#7a5c2a;whiteSpace=wrap;" vertex="1" parent="ws">
+          <mxGeometry x="104" y="90" width="210" height="14" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="silver" value="Silver&#xa;Normalized hourly • metadata • units" style="rounded=1;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=11;fontColor=#3a4552;fillColor=#e2e8f0;strokeColor=#94a3b8;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="ws">
+          <mxGeometry x="104" y="114" width="210" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="silverDesc" value="cleaned &amp; typed" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#64748b;whiteSpace=wrap;" vertex="1" parent="ws">
+          <mxGeometry x="104" y="162" width="210" height="14" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gold" value="Gold&#xa;Fact (weather ⨝ air-quality) + time &amp; threshold dims" style="rounded=1;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=11;fontColor=#5a3e00;fillColor=#fde68a;strokeColor=#d9b44a;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="ws">
+          <mxGeometry x="104" y="186" width="210" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="goldDesc" value="KPI-ready star schema" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#926c00;whiteSpace=wrap;" vertex="1" parent="ws">
+          <mxGeometry x="104" y="234" width="210" height="14" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="powerbi" value="Power BI&#xa;Service Principal&#xa;(USE CATALOG / SELECT)" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=default;imageAspect=0;aspect=fixed;image=https://app.diagrams.net/img/lib/azure2/power_platform/PowerBI.svg;fontFamily=Helvetica;fontSize=11;fontColor=#2d3748;whiteSpace=wrap;align=center;" vertex="1" parent="1">
+          <mxGeometry x="970" y="120" width="72" height="72" as="geometry"/>
+        </mxCell>
+        <mxCell id="powerbiMeta" value="Direct read on&#xa;bronze / silver / gold" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#6b7280;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="962" y="202" width="88" height="26" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend" value="&lt;b&gt;Legend &amp; Tech Stack&lt;/b&gt;&lt;br&gt;Storage: ADLS Gen2 (HNS)  •  Compute: Databricks Serverless + Photon  •  Catalog: Unity Catalog &amp;amp; External Location (abfss://)&lt;br&gt;IaC: Terraform  •  Orchestration: ADF (Copy + DatabricksJob + Daily Trigger)" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#475569;fillColor=#ffffff;strokeColor=#cbd5e1;arcSize=6;opacity=90;" vertex="1" parent="1">
+          <mxGeometry x="150" y="480" width="760" height="46" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.6;endArrow=classic;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#555555;" edge="1" parent="1" source="openMeteo" target="adf">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1Label" value="Copy (JSON via HTTPS)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Helvetica;fontSize=10;fontColor=#52525b;labelBackgroundColor=#ffffff;whiteSpace=wrap;" vertex="1" connectable="0" parent="e1">
+          <mxGeometry x="-0.18" y="-1" relative="1" as="geometry">
+            <mxPoint x="10" y="10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.6;endArrow=classic;endFill=1;" edge="1" parent="1" source="adf" target="adls">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2Label" value="bronze/*.json" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Helvetica;fontSize=10;fontColor=#52525b;labelBackgroundColor=#ffffff;whiteSpace=wrap;" vertex="1" connectable="0" parent="e2">
+          <mxGeometry x="0.35" y="-1" relative="1" as="geometry">
+            <mxPoint x="0" y="-8" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.6;endArrow=classic;endFill=1;" edge="1" parent="1" source="adls" target="bronze">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3Label" value="Auto Loader" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Helvetica;fontSize=10;fontColor=#52525b;labelBackgroundColor=#ffffff;whiteSpace=wrap;" vertex="1" connectable="0" parent="e3">
+          <mxGeometry x="0.15" y="-1" relative="1" as="geometry">
+            <mxPoint x="0" y="-8" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="eBronzeSilver" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.5;endArrow=classic;endFill=1;" edge="1" parent="ws" source="bronze" target="silver">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eSilverGold" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.5;endArrow=classic;endFill=1;" edge="1" parent="ws" source="silver" target="gold">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eGoldPbi" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.6;endArrow=classic;endFill=1;" edge="1" parent="1" source="gold" target="powerbi">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eGoldPbiLabel" value="SQL / Delta Sharing" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Helvetica;fontSize=10;fontColor=#52525b;labelBackgroundColor=#ffffff;whiteSpace=wrap;" vertex="1" connectable="0" parent="eGoldPbi">
+          <mxGeometry x="0.28" y="1" relative="1" as="geometry">
+            <mxPoint x="0" y="-8" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="eOrch" value="triggers" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=1.4;endArrow=classic;endFill=1;dashed=1;dashPattern=6 4;fontFamily=Helvetica;fontSize=10;fontColor=#52525b;labelBackgroundColor=#ffffff;whiteSpace=wrap;" edge="1" parent="1" source="adf" target="ws">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="440" y="340" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="footer" value="Backfill: separate ADF pipeline (openmeteobackfillpipeline) reuses same bronze sinks &amp;amp; DLT • Historical forecast endpoints parameterized by start_date / end_date" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=9;fontColor=#8a94a6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="150" y="536" width="760" height="16" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
