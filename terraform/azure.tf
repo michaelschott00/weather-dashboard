@@ -14,8 +14,11 @@ terraform {
       version = "~> 1.128.0"
     }
   }
-  backend "local" {
-    path = "../../terraform-state/terraform.tfstate"
+  backend "azurerm" {
+    resource_group_name  = "WeatherDashboard"
+    storage_account_name = "weatherdatalake"
+    container_name       = "tfstate"
+    key                  = "weather.tfstate"
   }
 }
 
@@ -28,12 +31,16 @@ provider "azapi" {}
 provider "databricks" {
   host                        = "https://${azurerm_databricks_workspace.ws.workspace_url}"
   azure_workspace_resource_id = azurerm_databricks_workspace.ws.id
-  auth_type                   = "azure-cli"
+  auth_type                   = var.databricks_auth_type
 }
 
 variable "LATITUDE" {}
 
 variable "LONGITUDE" {}
+
+variable "databricks_auth_type" {
+  default = "azure-cli"
+}
 
 data "azurerm_client_config" "current" {}
 
@@ -51,6 +58,12 @@ resource "azurerm_storage_account" "dl" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   is_hns_enabled           = true
+}
+
+resource "azurerm_storage_container" "state" {
+  name                  = "tfstate"
+  storage_account_name  = azurerm_storage_account.dl.name
+  container_access_type = "private"
 }
 
 resource "azurerm_storage_data_lake_gen2_filesystem" "fs" {

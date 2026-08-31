@@ -1,0 +1,95 @@
+name: CI - Test & Plan
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest databricks/tests/ -v
+
+  plan:
+    name: Terraform Plan
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      TF_IN_AUTOMATION: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.16.0'
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform fmt -check -diff
+        working-directory: ./terraform
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+        working-directory: ./terraform
+        env:
+          TF_VAR_LATITUDE: ${{ secrets.LATITUDE }}
+          TF_VAR_LONGITUDE: ${{ secrets.LONGITUDE }}
+          TF_VAR_databricks_auth_type: 'azure-client-secret'
+
+      - name: Write plan body file
+        run: |
+          mkdir -p .github/terraform-plans
+          {
+            echo "## Terraform Plan"
+            echo ""
+            echo "Automated plan generated for the latest commit on \`main\`."
+            echo ""
+            echo "- **Commit:** ${{ github.sha }}"
+            echo "- **Run:** [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo ""
+            echo "### Plan Details"
+            echo ""
+            echo '```hcl'
+            terraform show -no-color terraform/tfplan
+            echo '```'
+            echo ""
+            echo "Merge this PR to apply the changes."
+          } > .github/terraform-plans/plan-body.md
+
+      - name: Create Plan Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: .github/terraform-plans/
+          branch: auto/terraform-plan
+          title: 'Terraform Plan'
+          body-path: .github/terraform-plans/plan-body.md
+          labels: terraform
+          delete-branch: true
+          commit-message: 'Update terraform plan'
