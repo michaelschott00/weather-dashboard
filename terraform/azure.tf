@@ -61,9 +61,8 @@ resource "azurerm_storage_account" "dl" {
 }
 
 resource "azurerm_storage_container" "state" {
-  name                  = "tfstate"
-  storage_account_name  = azurerm_storage_account.dl.name
-  container_access_type = "private"
+  name               = "tfstate"
+  storage_account_id = azurerm_storage_account.dl.id
 }
 
 resource "azurerm_storage_data_lake_gen2_filesystem" "fs" {
