@@ -1,4 +1,4 @@
-name: CI - Test & Plan
+name: CI - Unit Test
 
 on:
   push:
