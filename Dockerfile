@@ -4,7 +4,7 @@ FROM ghcr.io/anomalyco/opencode
 #   - openjdk17-jre-headless: Spark requires a JVM (java gateway)
 #   - bash: Spark's launch scripts invoke bash, which Alpine omits by default
 ENV PYTHONUNBUFFERED=1
-RUN apk add --update --no-cache python3 py3-pip openjdk17-jre-headless bash nodejs npm unzip curl
+RUN apk add --update --no-cache python3 py3-pip openjdk17-jre-headless bash nodejs npm unzip curl libxml2-utils
 RUN curl -fsSLO https://releases.hashicorp.com/terraform/1.16.0/terraform_1.16.0_linux_amd64.zip \
     && unzip terraform_1.16.0_linux_amd64.zip \
     && mv terraform /usr/bin
@@ -15,10 +15,15 @@ RUN curl -fsSLO https://releases.hashicorp.com/terraform/1.16.0/terraform_1.16.0
 # It is an Electron app, so headless CLI use (Mermaid -> .drawio, ELK --layout,
 # PNG/SVG/PDF export) requires an X server (xvfb) plus fontconfig and a font so
 # exported diagrams render text.
+# ELECTRON_DISABLE_SANDBOX is required: as an Electron app it tries to create
+# namespaces, which is blocked in this container. Without it drawio dies with a
+# zygote/namespace check failure. xvfb / xvfb-run provide the virtual X display.
+ENV ELECTRON_DISABLE_SANDBOX=1
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
     && echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
     && echo "https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
-    && apk add --update --no-cache drawio-desktop xvfb fontconfig ttf-dejavu
+    && apk add --update --no-cache drawio-desktop xvfb xvfb-run fontconfig ttf-dejavu
+RUN npx @drawio/mcp
 
 # Install python packages
 COPY requirements.txt .
