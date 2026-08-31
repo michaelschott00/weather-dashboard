@@ -17,7 +17,7 @@ Data flows through four layers:
 
 A Power BI service principal is granted read access to all schemas. The current dashboard layout:
 
-![Dashboard preview](assets/dashboard.pdf)
+![Dashboard preview](assets/dashboard-0.png)
 
 ## KPI Definitions
 

@@ -273,4 +273,5 @@ tests/data/
 *.pdf
 *.dtmp
 !assets/azure-architecture.png
+!assets/dashboard-0.png
 .opencode
