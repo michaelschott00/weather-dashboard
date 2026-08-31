@@ -57,21 +57,10 @@ assets/                          # Dashboard and architecture diagrams
 - **Data source**: Open-Meteo APIs
 - **Testing**: pytest, pyright
 
-## CI/CD (GitHub Actions)
+## Terraform one-time bootstrap
 
-Three workflows run on push / pull request:
-
-| Workflow | Trigger | Purpose |
-|---|---|---|
-| `ci.yml` | push to `main` | Runs unit tests, then `terraform plan`; opens/updates a PR (`auto/terraform-plan`) with the plan output |
-| `deploy.yml` | merge to `main` | Runs `terraform apply -auto-approve` (guarded by the `production` environment) |
-| `pr-test.yml` | any PR to `main` | Runs the unit tests, so the auto-generated plan PR is validated too |
-
-**Terraform state** is stored in the existing data lake. The backend uses the `weatherdatalake` storage account in the `WeatherDashboard` resource group with a `tfstate` container. The container itself is a managed resource (`azurerm_storage_container "state"` in `terraform/azure.tf`).
-
-### One-time bootstrap
-
-Because the state backend lives *inside* infrastructure that Terraform itself creates, the first apply must run against a local backend first, then migrate to the remote one once the storage account and container exist:
+For convencience, terraform state is stored inside the data lake, which is itself a resource managed by terraform (`"azurerm_storage_account" "dl"` and `"azurerm_storage_container" "state"` in `terraform/azure.tf`). This creates a bootstrapping problem with terraform requiring access to the data lake *in order to* create the data lake.
+Therefore, the first apply must run against a local backend, then it becomes possible to migrate to the remote one once the storage account and container exist:
 
 1. Temporarily switch the backend to local — edit `terraform/azure.tf` and replace the `backend "azurerm" { ... }` block with:
    ```hcl
@@ -95,20 +84,4 @@ Because the state backend lives *inside* infrastructure that Terraform itself cr
    terraform plan
    ```
 
-After this runs once, `terraform init` in CI connects directly to the remote backend and applies normally.
-
-
-### Required GitHub configuration
-
-Add the following **repository secrets**:
-
-| Secret | Purpose |
-|---|---|
-| `ARM_CLIENT_ID` | Azure service principal application ID |
-| `ARM_CLIENT_SECRET` | Azure service principal client secret |
-| `ARM_TENANT_ID` | Azure AD tenant ID |
-| `ARM_SUBSCRIPTION_ID` | Azure subscription ID |
-| `LATITUDE` | `TF_VAR_LATITUDE` for the pipeline |
-| `LONGITUDE` | `TF_VAR_LONGITUDE` for the pipeline |
-
-The service principal needs `Contributor` on the subscription (for azurerm + the databricks provider's `azure-client-secret` auth). Define an `environment: production` in GitHub settings with required reviewers if you want a manual approval gate before `terraform apply`.
+After this runs once, `terraform init` connects directly to the remote backend and applies normally.
