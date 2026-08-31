@@ -2,10 +2,11 @@
 - Containers / Boundaries: Use semi-transparent rectangles or swimlanes to denote logical boundaries (e.g., the data factory orchestrates multiple parts, so those parts should be encapsulated in a container).
 - Shapes: Use official shapes where possible. For example, for databricks the official logo is available, so use it instead of generic boxes. Azure resources also have their official icons in drawio. If you cannot find them, stop immediately. Do not use generic boxes as a workaround.
 - Data Lake Gen2: There's no dedicated shape for the Data Lake Gen2 in drawio. Use the "Data Lake" shape for it.
-- Shape Consistency: Keep icon sizes uniform.
+- Shape Consistency: Keep icon sizes uniform but do not change their proportions. Match their sizes by the longest edge.
 - Labels: Place clear text labels below the icons, using a readable sans-serif font like Helvetica or Inter, size 11pt or 12pt.
 - Routing: Use Orthogonal or Entity Relation edge styles so lines bend at clean 90-degree angles rather than crossing diagonally over components.
 - Line Styles:
   - Solid lines with a standard arrow (->).
   - Keep connection lines dark gray (#666666) rather than pure black to reduce visual noise.
 - Export: SVG export does not work properly because some shapes are not rendered. Only produce a .drawio file.
+- For shapes with text labels, add a separate textbox instead of adding the text directly to the label. This makes formatting easier because text and shape can be placed and resized independently.
